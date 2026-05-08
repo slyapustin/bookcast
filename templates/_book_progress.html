@@ -1,0 +1,73 @@
+<div class="px-4 py-3 border-b border-stone-100">
+  <div class="flex items-center justify-between">
+    <h2 class="font-medium">Chapters</h2>
+    <span class="text-xs text-stone-500">
+      {{ done_count }}/{{ chapters|length }} done
+      {% if rendering_count %}· {{ rendering_count }} rendering{% endif %}
+      · status: {{ book.status.value.replace('_', ' ') }}
+    </span>
+  </div>
+  <div class="mt-2 w-full h-1.5 bg-stone-100 rounded">
+    <div class="h-1.5 bg-stone-700 rounded transition-all" style="width: {{ overall_pct }}%"></div>
+  </div>
+</div>
+{% if not chapters %}
+  <div class="px-4 py-6 text-stone-500">Parsing book…</div>
+{% else %}
+  <ol class="divide-y divide-stone-100">
+    {% for ch in chapters %}
+      {% set status = ch.status.value %}
+      <li class="px-4 py-2.5 text-sm">
+        <div class="flex items-center gap-3">
+          <span class="w-8 text-stone-400 tabular-nums">{{ ch.idx }}.</span>
+          {% if status == 'done' %}
+            <button
+              type="button"
+              data-play-chapter="/audio/{{ ch.id }}.mp3?t={{ book.feed_token }}"
+              data-title="{{ ch.idx }}. {{ ch.title }}"
+              class="flex-1 text-left truncate hover:text-stone-700"
+              title="Play chapter"
+            >
+              <span class="text-stone-400 mr-1">▶︎</span>{{ ch.title }}
+            </button>
+          {% else %}
+            <span class="flex-1 truncate">{{ ch.title }}</span>
+          {% endif %}
+          <span class="text-xs px-2 py-0.5 rounded
+            {% if status == 'done' %}bg-emerald-50 text-emerald-700
+            {% elif status == 'rendering' %}bg-amber-50 text-amber-700
+            {% elif status == 'failed' %}bg-rose-50 text-rose-700
+            {% elif status == 'skipped' %}bg-stone-100 text-stone-500
+            {% else %}bg-stone-50 text-stone-500{% endif %}">{{ status }}</span>
+          {% if ch.duration_s %}
+            <span class="text-xs text-stone-400 tabular-nums w-12 text-right">{{ '%d:%02d'|format(ch.duration_s // 60, ch.duration_s % 60) }}</span>
+          {% else %}
+            <span class="w-12"></span>
+          {% endif %}
+          <form
+            hx-post="/book/{{ book.id }}/chapter/{{ ch.id }}/skip"
+            hx-target="closest section"
+            hx-swap="innerHTML"
+            class="inline"
+          >
+            <button class="text-xs text-stone-400 hover:text-stone-700" type="submit">
+              {% if status == 'skipped' %}include{% else %}skip{% endif %}
+            </button>
+          </form>
+        </div>
+        {% if status == 'rendering' and ch.id in chunk_stats %}
+          {% set done, total = chunk_stats[ch.id] %}
+          {% set pct = (100 * done // total) if total else 0 %}
+          <div class="mt-1.5 flex items-center gap-2 pl-11">
+            <div class="flex-1 h-1 bg-stone-100 rounded">
+              <div class="h-1 bg-amber-500 rounded transition-all" style="width: {{ pct }}%"></div>
+            </div>
+            <span class="text-xs text-stone-500 tabular-nums w-20 text-right">{{ done }}/{{ total }} chunks</span>
+          </div>
+        {% elif status == 'failed' and ch.error %}
+          <div class="mt-1 pl-11 text-xs text-rose-600 truncate" title="{{ ch.error }}">{{ ch.error[:120] }}{% if ch.error|length > 120 %}…{% endif %}</div>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ol>
+{% endif %}

@@ -1,0 +1,2 @@
+/* Minimal overrides on top of Tailwind CDN. */
+input[readonly]:focus { outline: none; }

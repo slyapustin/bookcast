@@ -1,0 +1,48 @@
+[project]
+name = "bookcast"
+version = "0.1.0"
+description = "Turn your epub/fb2/txt books into a personal podcast"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.20",
+    "pydantic-settings>=2.7",
+    "sqlalchemy[asyncio]>=2.0",
+    "aiosqlite>=0.20",
+    "alembic>=1.14",
+    "feedgen>=1.0",
+    "ebooklib>=0.18",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.3",
+    "langdetect>=1.0.9",
+    "mutagen>=1.47",
+    "Pillow>=11",
+    "kokoro-onnx>=0.4",
+    "onnxruntime<1.26",
+    "soundfile>=0.12",
+    "numpy>=2",
+    "torch>=2.4",
+    "torchaudio>=2.4",
+    "omegaconf>=2.3",
+    "num2words>=0.5",
+    "pyyaml>=6.0",
+    "httpx>=0.27",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "RUF"]
+# B008: FastAPI Depends() in defaults is the official idiom, not a bug.
+# RUF001: regex for sentence boundaries intentionally mixes Cyrillic and Latin uppercase ranges.
+# E501: long lines tolerated where breaking would hurt readability.
+ignore = ["B008", "RUF001", "E501"]

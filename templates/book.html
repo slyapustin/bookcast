@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block title %}{{ book.title }} · Bookcast{% endblock %}
+{% block content %}
+<div class="flex gap-6 mb-8">
+  <div class="w-32 h-32 flex-shrink-0">
+    {% if book.cover_path %}
+      <img src="/cover/{{ book.feed_token }}.jpg" alt="" class="w-32 h-32 rounded-md object-cover shadow" />
+    {% else %}
+      <div class="w-32 h-32 rounded-md bg-stone-200"></div>
+    {% endif %}
+  </div>
+  <div class="flex-1 min-w-0">
+    <h1 class="text-2xl font-semibold truncate">{{ book.title }}</h1>
+    <div class="text-stone-500">{{ book.author or "Unknown author" }}</div>
+    <div class="mt-2 text-xs text-stone-500">
+      <span class="uppercase">{{ book.source_format }}</span> ·
+      <span>{{ book.language }}</span>
+    </div>
+
+    <div class="mt-4">
+      <label class="block text-xs font-medium text-stone-500 uppercase tracking-wide mb-1">Podcast feed (Tailscale-only)</label>
+      <div class="flex gap-2 items-center">
+        <input
+          type="text"
+          readonly
+          value="{{ feed_url }}"
+          class="w-full rounded-md border border-stone-300 px-3 py-1 text-sm bg-stone-50 font-mono"
+          onclick="this.select()"
+        />
+      </div>
+      <p class="text-xs text-stone-500 mt-1">In Apple Podcasts: Library → ⋯ → "Add a Show by URL".</p>
+    </div>
+  </div>
+</div>
+
+{% if book.error %}
+  <div class="rounded-md bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-800 mb-4">
+    {{ book.error }}
+  </div>
+{% endif %}
+
+<form method="post" action="/book/{{ book.id }}/render" class="rounded-lg border border-stone-200 bg-white p-4 mb-6">
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+    <label class="block">
+      <span class="text-xs font-medium text-stone-500 uppercase tracking-wide">Language</span>
+      <select name="language" id="language-select" class="mt-1 w-full rounded-md border border-stone-300 px-2 py-2 bg-white">
+        {% for lang in supported_languages %}
+          <option value="{{ lang }}" {% if book.language == lang %}selected{% endif %}>{{ lang }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="block sm:col-span-2">
+      <span class="text-xs font-medium text-stone-500 uppercase tracking-wide">Voice</span>
+      <div class="mt-1 flex gap-2">
+        <select id="voice-select" name="voice" class="flex-1 min-w-0 rounded-md border border-stone-300 px-2 py-2 bg-white">
+          {% for lang, voices in voices_by_lang.items() %}
+            {% for v in voices %}
+              <option value="{{ v.id }}" data-lang="{{ lang }}" {% if book.voice == v.id %}selected{% endif %}>
+                {{ v.label }} ({{ lang }})
+              </option>
+            {% endfor %}
+          {% endfor %}
+        </select>
+        <button
+          type="button"
+          id="voice-preview-btn"
+          class="rounded-md border border-stone-300 px-3 py-2 text-sm font-medium hover:bg-stone-100 disabled:opacity-50"
+          title="Preview the selected voice"
+        >
+          <span id="voice-preview-label">▶︎ Preview</span>
+        </button>
+      </div>
+      <audio id="voice-preview-audio" class="mt-2 w-full" controls preload="none" hidden></audio>
+      <p id="voice-preview-status" class="mt-1 text-xs text-stone-500" hidden></p>
+    </label>
+  </div>
+  <script>
+    (function () {
+      const lang = document.getElementById('language-select');
+      const voice = document.getElementById('voice-select');
+      const btn = document.getElementById('voice-preview-btn');
+      const label = document.getElementById('voice-preview-label');
+      const audio = document.getElementById('voice-preview-audio');
+      const status = document.getElementById('voice-preview-status');
+
+      function sync() {
+        const want = lang.value;
+        let firstMatch = null;
+        for (const opt of voice.options) {
+          const ok = opt.dataset.lang === want;
+          opt.hidden = !ok;
+          opt.disabled = !ok;
+          if (ok && firstMatch === null) firstMatch = opt;
+        }
+        if (voice.selectedOptions[0] && voice.selectedOptions[0].hidden && firstMatch) {
+          firstMatch.selected = true;
+        }
+        // Voice changed → reset audio so the user has to click again.
+        audio.hidden = true;
+        audio.removeAttribute('src');
+        audio.load();
+        status.hidden = true;
+      }
+
+      lang.addEventListener('change', sync);
+      voice.addEventListener('change', sync);
+      sync();
+
+      btn.addEventListener('click', async () => {
+        const v = voice.value;
+        const l = lang.value;
+        if (!v || !l) return;
+        const url = `/voice-preview/${encodeURIComponent(l)}/${encodeURIComponent(v)}.wav`;
+        btn.disabled = true;
+        label.textContent = 'Loading…';
+        status.hidden = false;
+        status.textContent = 'Synthesizing sample (first preview per voice can take a minute while the model loads)…';
+        try {
+          // No cache: previous 500s shouldn't poison subsequent attempts.
+          const r = await fetch(url, { method: 'GET', cache: 'no-store' });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const blob = await r.blob();
+          audio.src = URL.createObjectURL(blob);
+          audio.hidden = false;
+          status.hidden = true;
+          await audio.play();
+        } catch (e) {
+          status.hidden = false;
+          status.textContent = `Preview failed: ${e.message}`;
+        } finally {
+          btn.disabled = false;
+          label.textContent = '▶︎ Preview';
+        }
+      });
+    })();
+  </script>
+  <button
+    type="submit"
+    {% if book.status.value not in ("ready_to_render", "done", "failed") %}disabled{% endif %}
+    class="mt-4 rounded-md bg-stone-900 text-white px-4 py-2 font-medium hover:bg-stone-800 disabled:opacity-50"
+  >
+    {% if book.status.value == "done" %}Re-render missing chapters{% else %}Generate audio{% endif %}
+  </button>
+  <span class="ml-3 text-xs text-stone-500">{{ done_count }}/{{ chapters|length }} chapters done</span>
+</form>
+
+<div
+  id="player"
+  class="hidden sticky top-0 z-10 mb-4 rounded-lg border border-stone-200 bg-white shadow-sm p-3"
+>
+  <div class="flex items-center gap-3">
+    <span id="player-title" class="flex-1 truncate font-medium text-sm">No chapter playing</span>
+    <button
+      type="button"
+      id="player-close"
+      class="text-stone-400 hover:text-stone-700 text-sm"
+      title="Close player"
+    >✕</button>
+  </div>
+  <audio id="player-audio" class="mt-2 w-full" controls preload="metadata"></audio>
+</div>
+
+<section
+  hx-get="/book/{{ book.id }}/progress"
+  hx-trigger="load, every 3s"
+  hx-swap="innerHTML"
+  class="rounded-lg border border-stone-200 bg-white"
+>
+  {% include "_book_progress.html" %}
+</section>
+
+<script>
+  (function () {
+    const player = document.getElementById('player');
+    const audio = document.getElementById('player-audio');
+    const title = document.getElementById('player-title');
+    const closeBtn = document.getElementById('player-close');
+
+    // Delegate play clicks because chapter rows are replaced by HTMX every 3s.
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-play-chapter]');
+      if (!btn) return;
+      e.preventDefault();
+      const src = btn.getAttribute('data-play-chapter');
+      const chTitle = btn.getAttribute('data-title') || 'Chapter';
+      // Only reload audio if it's a different chapter; otherwise just toggle.
+      if (audio.src !== new URL(src, location.href).href) {
+        audio.src = src;
+      }
+      title.textContent = chTitle;
+      player.classList.remove('hidden');
+      audio.play().catch(() => { /* user-gesture required: ignored */ });
+    });
+
+    closeBtn.addEventListener('click', () => {
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
+      player.classList.add('hidden');
+    });
+  })();
+</script>
+
+<form method="post" action="/book/{{ book.id }}/delete" class="mt-8">
+  <button
+    type="submit"
+    onclick="return confirm('Delete this book and all generated audio?')"
+    class="text-sm text-rose-700 hover:underline"
+  >Delete book</button>
+</form>
+{% endblock %}
