@@ -43,6 +43,15 @@ def build_book_feed(book: Book, chapters: list[Chapter]) -> bytes:
     pe.itunes_image(cover_url)
     pe.itunes_block(True)  # don't list our private feed in Apple's directory
 
+    # Episode numbers reflect position among *non-skipped* chapters (1-based).
+    # Skipped chapters don't consume episode slots, so the user sees a clean
+    # 1, 2, 3, … sequence even after skipping front/back-matter.
+    listed_chapters = sorted(
+        (c for c in chapters if c.status != ChapterStatus.skipped),
+        key=lambda c: c.idx,
+    )
+    episode_no_by_chapter_id = {c.id: i for i, c in enumerate(listed_chapters, start=1)}
+
     done_chapters = [c for c in chapters if c.status == ChapterStatus.done and c.mp3_path]
     base_time = book.created_at or datetime.now(UTC)
     if base_time.tzinfo is None:
@@ -52,14 +61,15 @@ def build_book_feed(book: Book, chapters: list[Chapter]) -> bytes:
         fe = fg.add_entry()
         ep_url = f"{base}/audio/{ch.id}.mp3?t={book.feed_token}"
         guid = f"{book.feed_token}-{ch.id}"
+        episode_no = episode_no_by_chapter_id.get(ch.id, ch.idx)
         fe.id(guid)
         fe.guid(guid, permalink=False)
         fe.title(ch.title or f"Chapter {ch.idx}")
         fe.description(ch.title or f"Chapter {ch.idx}")
         # Stagger pubDate so order is preserved (RSS readers sort by date).
-        fe.pubDate(_to_pubdate(base_time + timedelta(minutes=ch.idx)))
+        fe.pubDate(_to_pubdate(base_time + timedelta(minutes=episode_no)))
         fe.enclosure(ep_url, str(ch.bytes_size or 0), "audio/mpeg")
-        fe.podcast.itunes_episode(ch.idx)
+        fe.podcast.itunes_episode(episode_no)
         fe.podcast.itunes_season(1)
         fe.podcast.itunes_episode_type("full")
         fe.podcast.itunes_image(cover_url)
