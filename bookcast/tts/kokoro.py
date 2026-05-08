@@ -65,7 +65,7 @@ class KokoroEngine:
         if not text:
             raise TTSError("empty text")
         with self._lock:
-            samples, sr = self._synth_with_split(text, voice or "af_heart")
+            samples, sr = self._synth_with_split(text, voice or settings.default_voice_en)
         if not isinstance(samples, np.ndarray):
             samples = np.asarray(samples, dtype=np.float32)
         sf.write(out_path, samples, sr, subtype="PCM_16")

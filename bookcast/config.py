@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     kokoro_voices_path: str | None = None
 
     # Default voices per language
-    default_voice_en: str = "af_heart"
+    default_voice_en: str = "am_michael"
     default_voice_ru: str = "xenia"
 
     tts_chunk_chars: int = 480
