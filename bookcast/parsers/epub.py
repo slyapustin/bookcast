@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -48,6 +49,11 @@ def parse(path: Path) -> ParsedBook:
             continue
         href = item.get_name()
         toc_title = toc_titles.get(href) or toc_titles.get(href.split("#", 1)[0])
+        split_chapters = _split_html_document_by_chapter_headings(soup)
+        if split_chapters:
+            chapters.extend(split_chapters)
+            continue
+
         title_guess = (
             toc_title
             or _first_heading(soup)
@@ -105,6 +111,48 @@ def _extract_cover(book) -> bytes | None:
         if data:
             return bytes(data)
     return None
+
+
+def _split_html_document_by_chapter_headings(soup: BeautifulSoup) -> list[ParsedChapter]:
+    """Split EPUB spine documents that contain several real book chapters.
+
+    Some Project Gutenberg EPUBs group multiple book chapters into one HTML
+    document. If we treat each spine file as one audio episode, the UI appears
+    to jump from chapter 1 → 4 → 10. Split on explicit chapter headings when a
+    single document contains more than one of them.
+    """
+    from . import ParsedChapter
+
+    headings = [
+        h
+        for h in soup.find_all(("h1", "h2", "h3"))
+        if _is_chapter_heading(h.get_text(" ", strip=True))
+    ]
+    if len(headings) < 2:
+        return []
+
+    chapters: list[ParsedChapter] = []
+    for i, heading in enumerate(headings):
+        next_heading = headings[i + 1] if i + 1 < len(headings) else None
+        parts = [heading.get_text("\n", strip=True)]
+        node = heading.next_sibling
+        while node is not None and node is not next_heading:
+            if hasattr(node, "get_text"):
+                text = node.get_text("\n", strip=True)
+            else:
+                text = str(node).strip()
+            if text:
+                parts.append(text)
+            node = node.next_sibling
+        text = clean_text("\n".join(parts))
+        if text and len(text) >= 40:
+            title = heading.get_text(" ", strip=True) or f"Chapter {len(chapters) + 1}"
+            chapters.append(ParsedChapter(title=title[:200], text=text))
+    return chapters
+
+
+def _is_chapter_heading(text: str) -> bool:
+    return bool(re.match(r"^(chapter\s+\d+\b|epilogue\b)", text.strip(), re.IGNORECASE))
 
 
 def _flatten_toc(toc) -> dict[str, str]:
