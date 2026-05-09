@@ -80,6 +80,8 @@ async def tts_chapter(chapter_id: int, job_id: int) -> None:
             log.info("chapter %s is already done — bailing", chapter_id)
             return
         book = await _get_book(session, chapter.book_id)
+        if book.status == BookStatus.ready_to_render:
+            book.status = BookStatus.rendering
         chapter.status = ChapterStatus.rendering
         chapter.error = None
         # Ensure chunks exist
