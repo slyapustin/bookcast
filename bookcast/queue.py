@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import case, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .config import settings
 from .models import Job, JobKind, JobState
 
 
@@ -22,6 +23,13 @@ async def claim_one(session: AsyncSession) -> Job | None:
     finished chapters appear in the feed as soon as their chunks are rendered,
     instead of waiting for every chapter's TTS to finish first.
     """
+    running_tts = await session.scalar(
+        select(func.count())
+        .select_from(Job)
+        .where(Job.state == JobState.running, Job.kind == JobKind.tts_chapter)
+    )
+    tts_slots_available = (running_tts or 0) < settings.tts_max_parallel_chapters
+
     kind_priority = case(
         {
             JobKind.assemble_chapter: 0,
@@ -31,13 +39,11 @@ async def claim_one(session: AsyncSession) -> Job | None:
         value=Job.kind,
         else_=3,
     )
+    query = select(Job).where(Job.state == JobState.pending)
+    if not tts_slots_available:
+        query = query.where(Job.kind != JobKind.tts_chapter)
     candidate = (
-        await session.execute(
-            select(Job)
-            .where(Job.state == JobState.pending)
-            .order_by(kind_priority.asc(), Job.id.asc())
-            .limit(1)
-        )
+        await session.execute(query.order_by(kind_priority.asc(), Job.id.asc()).limit(1))
     ).scalar_one_or_none()
     if candidate is None:
         return None

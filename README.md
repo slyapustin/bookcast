@@ -42,6 +42,7 @@ project root.
 | `BOOKCAST_DEFAULT_VOICE_EN` | `af_heart` | Default Kokoro voice. |
 | `BOOKCAST_DEFAULT_VOICE_RU` | `xenia` | Default Silero voice. |
 | `BOOKCAST_TTS_CHUNK_CHARS` | `480` | Max chars per TTS request — chunks make crashes resumable. |
+| `BOOKCAST_TTS_MAX_PARALLEL_CHAPTERS` | `1` | Max chapters that may be rendered by TTS at the same time across all worker processes. |
 | `BOOKCAST_MP3_BITRATE` | `64k` | mp3 bitrate. 64k mono ≈ 28 MB/hour. |
 | `BOOKCAST_DATA_DIR` | `./data` | Where originals, mp3s, covers, model weights live. |
 
