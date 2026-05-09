@@ -208,7 +208,7 @@ async def assemble_chapter(chapter_id: int, job_id: int) -> None:
                 select(Chapter).where(Chapter.book_id == book_id)
             )
         ).scalars().all()
-        if all(ch.status == ChapterStatus.done for ch in chapters):
+        if all(ch.status in {ChapterStatus.done, ChapterStatus.skipped} for ch in chapters):
             book = await _get_book(session, book_id)
             book.status = BookStatus.done
         await update_progress(session, job_id, 1.0)

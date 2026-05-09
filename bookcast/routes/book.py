@@ -42,7 +42,7 @@ async def book_detail(
             "voices_by_lang": voices_by_lang,
             "feed_url": feed_url,
             "supported_languages": all_supported_languages(),
-            "done_count": sum(1 for c in chapters if c.status == ChapterStatus.done),
+            "done_count": sum(1 for c in chapters if c.status in {ChapterStatus.done, ChapterStatus.skipped}),
         },
     )
 
@@ -156,7 +156,7 @@ async def book_progress(
                 total + 1,
             )
 
-    done_count = sum(1 for c in chapters if c.status == ChapterStatus.done)
+    done_count = sum(1 for c in chapters if c.status in {ChapterStatus.done, ChapterStatus.skipped})
     rendering_count = len(rendering_ids)
     overall_pct = round(100 * done_count / max(1, len(chapters)))
 
