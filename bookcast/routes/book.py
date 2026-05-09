@@ -47,6 +47,23 @@ async def book_detail(
     )
 
 
+@router.post("/book/{book_id}/metadata")
+async def update_book_metadata(
+    book_id: int,
+    title: str = Form(...),
+    author: str = Form(""),
+    session: AsyncSession = Depends(db_session),
+):
+    book = await _get_book(session, book_id)
+    clean_title = title.strip()
+    clean_author = author.strip()
+    if not clean_title:
+        raise HTTPException(400, "Title is required")
+    book.title = clean_title[:500]
+    book.author = clean_author[:500] or None
+    return RedirectResponse(f"/book/{book.id}", status_code=303)
+
+
 @router.post("/book/{book_id}/render")
 async def render_book(
     book_id: int,
